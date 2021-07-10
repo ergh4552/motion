@@ -67,7 +67,8 @@ const char *eventList[] = {
     "EVENT_CAMERA_LOST",
     "EVENT_CAMERA_FOUND",
     "EVENT_FFMPEG_PUT",
-    "EVENT_LAST"
+    "EVENT_LAST",
+    "EVENT_MAX_MOVIE"
 };
 
 /**
@@ -501,6 +502,7 @@ static void event_image_snapshot(struct context *cnt, motion_event eventtype
     char filepath[PATH_MAX];
     int offset = 0;
     int len = strlen(cnt->conf.snapshot_filename);
+    int passthrough;
 
     (void)eventtype;
     (void)filename;
@@ -532,7 +534,13 @@ static void event_image_snapshot(struct context *cnt, motion_event eventtype
             , cnt->conf.target_dir
             , (int)(PATH_MAX-1-strlen(cnt->conf.target_dir))
             , fname);
-        put_picture(cnt, fullfilename, img_data->image_norm, FTYPE_IMAGE_SNAPSHOT);
+
+        passthrough = util_check_passthrough(cnt);
+        if ((cnt->imgs.size_high > 0) && (!passthrough)) {
+            put_picture(cnt, fullfilename, img_data->image_high, FTYPE_IMAGE_SNAPSHOT);
+        } else {
+            put_picture(cnt, fullfilename, img_data->image_norm, FTYPE_IMAGE_SNAPSHOT);
+        }
         event(cnt, EVENT_FILECREATE, NULL, fullfilename, (void *)FTYPE_IMAGE_SNAPSHOT, tv1);
 
         /*
@@ -561,7 +569,14 @@ static void event_image_snapshot(struct context *cnt, motion_event eventtype
             , (int)(PATH_MAX-1-strlen(cnt->conf.target_dir))
             , fname);
         remove(fullfilename);
-        put_picture(cnt, fullfilename, img_data->image_norm, FTYPE_IMAGE_SNAPSHOT);
+
+        passthrough = util_check_passthrough(cnt);
+        if ((cnt->imgs.size_high > 0) && (!passthrough)) {
+            put_picture(cnt, fullfilename, img_data->image_high, FTYPE_IMAGE_SNAPSHOT);
+        } else {
+            put_picture(cnt, fullfilename, img_data->image_norm, FTYPE_IMAGE_SNAPSHOT);
+        }
+
         event(cnt, EVENT_FILECREATE, NULL, fullfilename, (void *)FTYPE_IMAGE_SNAPSHOT, tv1);
     }
 
@@ -863,8 +878,8 @@ static void event_new_video(struct context *cnt, motion_event eventtype
     (void)tv1;
 
     cnt->movie_last_shot = -1;
-
     cnt->movie_fps = cnt->lastrate;
+    cnt->movietime = tv1->tv_sec;
 
     MOTION_LOG(INF, TYPE_EVENTS, NO_ERRNO, _("Source FPS %d"), cnt->movie_fps);
 
@@ -1355,6 +1370,26 @@ struct event_handlers event_handlers[] = {
     {
     EVENT_CAMERA_FOUND,
     event_camera_found
+    },
+    {
+    EVENT_MAX_MOVIE,
+    event_ffmpeg_closefile
+    },
+    {
+    EVENT_MAX_MOVIE,
+    event_extpipe_end
+    },
+    {
+    EVENT_MAX_MOVIE,
+    event_new_video
+    },
+    {
+    EVENT_MAX_MOVIE,
+    event_ffmpeg_newfile
+    },
+    {
+    EVENT_MAX_MOVIE,
+    event_create_extpipe
     },
     {0, NULL}
 };

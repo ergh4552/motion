@@ -66,7 +66,7 @@
     #endif
 
     /*********************************************/
-    #if ( MYFFVER >= 57000)
+    #if (MYFFVER >= 57000)
         #define MY_CODEC_FLAG_GLOBAL_HEADER AV_CODEC_FLAG_GLOBAL_HEADER
         #define MY_CODEC_FLAG_QSCALE        AV_CODEC_FLAG_QSCALE
     #else
@@ -74,16 +74,29 @@
         #define MY_CODEC_FLAG_QSCALE        CODEC_FLAG_QSCALE
     #endif
 
+    #if  (MYFFVER >= 59000)
+        typedef const AVCodec my_AVCodec; /* Version independent for AVCodec*/
+    #else
+        typedef AVCodec my_AVCodec; /* Version independent for AVCodec*/
+    #endif
+
     AVFrame *my_frame_alloc(void);
     void my_frame_free(AVFrame *frame);
-    void my_packet_unref(AVPacket pkt);
+    void my_packet_free(AVPacket *pkt);
     void my_avcodec_close(AVCodecContext *codec_context);
     int my_image_get_buffer_size(enum MyPixelFormat pix_fmt, int width, int height);
     int my_image_copy_to_buffer(AVFrame *frame,uint8_t *buffer_ptr,enum MyPixelFormat pix_fmt,int width,int height,int dest_size);
     int my_image_fill_arrays(AVFrame *frame,uint8_t *buffer_ptr,enum MyPixelFormat pix_fmt,int width,int height);
     int my_copy_packet(AVPacket *dest_pkt, AVPacket *src_pkt);
+    AVPacket *my_packet_alloc(AVPacket *pkt);
 
 #endif /* HAVE_FFMPEG */
+
+#if MHD_VERSION >= 0x00097002
+    typedef enum MHD_Result mymhd_retcd;
+#else
+    typedef int mymhd_retcd;
+#endif
 
 void *mymalloc(size_t nbytes);
 void *myrealloc(void *ptr, size_t size, const char *desc);
@@ -103,6 +116,7 @@ void util_trim(char *parm);
 void util_parms_free(struct params_context *parameters);
 void util_parms_parse(struct params_context *parameters, char *confparm);
 void util_parms_add_default(struct params_context *parameters, const char *parm_nm, const char *parm_vl);
+void util_parms_update(struct params_context *params, struct context *cnt, const char *cfgitm);
 
 int mystrceq(const char *var1, const char *var2);
 int mystrcne(const char *var1, const char *var2);

@@ -28,6 +28,7 @@
 
 #ifdef HAVE_FFMPEG
 
+
 /*********************************************/
 AVFrame *my_frame_alloc(void)
 {
@@ -100,12 +101,12 @@ int my_image_fill_arrays(AVFrame *frame,uint8_t *buffer_ptr,enum MyPixelFormat p
     return retcd;
 }
 /*********************************************/
-void my_packet_unref(AVPacket pkt)
+void my_packet_free(AVPacket *pkt)
 {
-    #if ( MYFFVER >= 57000)
-        av_packet_unref(&pkt);
+    #if (MYFFVER >= 57041)
+        av_packet_free(&pkt);
     #else
-        av_free_packet(&pkt);
+        av_free_packet(pkt);
     #endif
 }
 /*********************************************/
@@ -133,6 +134,22 @@ int my_copy_packet(AVPacket *dest_pkt, AVPacket *src_pkt)
             return 0;
         }
     #endif
+}
+
+/*********************************************/
+AVPacket *my_packet_alloc(AVPacket *pkt)
+{
+     if (pkt != NULL) {
+        my_packet_free(pkt);
+    };
+    pkt = av_packet_alloc();
+    #if (MYFFVER < 58076)
+        av_init_packet(pkt);
+        pkt->data = NULL;
+        pkt->size = 0;
+    #endif
+
+    return pkt;
 }
 
 #endif
@@ -371,6 +388,13 @@ static void mystrftime_long (const struct context *cnt, int width, const char *w
         return;
     }
     if (SPECIFIERWORD("dbeventid")) {
+        #ifdef HAVE_PGSQL
+            if (cnt->eid_db_format == dbeid_no_return) {
+                MOTION_LOG(ERR, TYPE_DB, NO_ERRNO,
+                    _("Used %{dbeventid} but sql_query_start returned no valid event ID"));
+                ((struct context *)cnt)->eid_db_format = dbeid_use_error;
+            }
+        #endif
         sprintf(out, "%*llu", width, cnt->database_event_id);
         return;
     }
@@ -544,7 +568,7 @@ size_t mystrftime(const struct context *cnt, char *s, size_t max, const char *us
                     while ((*pos_userformat != '}') && (*pos_userformat != 0)) {
                         ++pos_userformat;
                     }
-                    mystrftime_long (cnt, width, word, (int)(pos_userformat-word), tempstr);
+                    mystrftime_long ((struct context *)cnt, width, word, (int)(pos_userformat-word), tempstr);
                     if (*pos_userformat == '\0') {
                         --pos_userformat;
                     }
@@ -985,6 +1009,112 @@ void util_parms_add_default(struct params_context *parameters, const char *parm_
     if (dflt == TRUE) {
         util_parms_add(parameters, parm_nm, parm_vl);
     }
+
+}
+
+/* Update config line with the values from the params array */
+void util_parms_update(struct params_context *params, struct context *cnt, const char *cfgitm)
+{
+    int indx, retcd;
+    char *tst;
+    char newline[PATH_MAX];
+    char hldline[PATH_MAX];
+
+    for (indx = 0; indx < params->params_count; indx++) {
+        if (indx == 0){
+            retcd = snprintf(newline, PATH_MAX , "%s", " ");
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+
+            retcd = snprintf(hldline, PATH_MAX, "%s", " ");
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+
+        } else {
+            retcd = snprintf(newline, PATH_MAX, "%s,", hldline);
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+
+            retcd = snprintf(hldline, PATH_MAX, "%s", newline);
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+        }
+
+        tst = strstr(params->params_array[indx].param_name," ");
+        if (tst == NULL) {
+            retcd = snprintf(newline, PATH_MAX, "%s%s"
+                , hldline, params->params_array[indx].param_name);
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+
+            retcd = snprintf(hldline, PATH_MAX, "%s", newline);
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+
+        } else {
+            retcd = snprintf(newline, PATH_MAX, "%s\"%s\""
+                , hldline, params->params_array[indx].param_name);
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+
+            retcd = snprintf(hldline, PATH_MAX, "%s", newline);
+            if ((retcd < 0) || (retcd > PATH_MAX)) {
+                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+            }
+        }
+
+        retcd = snprintf(newline, PATH_MAX, "%s=%s"
+            , hldline, params->params_array[indx].param_value);
+        if ((retcd < 0) || (retcd > PATH_MAX)) {
+            MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+        }
+
+        retcd = snprintf(hldline, PATH_MAX, "%s", newline);
+        if ((retcd < 0) || (retcd > PATH_MAX)) {
+            MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+        }
+    }
+
+    if (mystrceq(cfgitm, "netcam_params")) {
+        free(cnt->conf.netcam_params);
+        cnt->conf.netcam_params = mymalloc(strlen(newline)+1);
+        retcd = snprintf(cnt->conf.netcam_params, strlen(newline)+1, "%s", newline);
+        if ((retcd < 0) || (retcd > PATH_MAX)) {
+            MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+        }
+        MOTION_LOG(INF, TYPE_ALL, NO_ERRNO, _("New netcam_params: %s"), newline);
+
+    } else if (mystrceq(cfgitm, "netcam_high_params")) {
+        free(cnt->conf.netcam_high_params);
+        cnt->conf.netcam_high_params = mymalloc(strlen(newline)+1);
+        retcd = snprintf(cnt->conf.netcam_high_params, strlen(newline)+1, "%s", newline);
+        if ((retcd < 0) || (retcd > PATH_MAX)) {
+            MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+        }
+        MOTION_LOG(INF, TYPE_ALL, NO_ERRNO, _("New netcam_high_params: %s"), newline);
+
+    } else if (mystrceq(cfgitm, "video_params")) {
+        free(cnt->conf.video_params);
+        cnt->conf.video_params = mymalloc(strlen(newline)+1);
+        retcd = snprintf(cnt->conf.video_params, strlen(newline)+1, "%s", newline);
+        if ((retcd < 0) || (retcd > PATH_MAX)) {
+            MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,_("Error: %s"), newline);
+        }
+        MOTION_LOG(INF, TYPE_ALL, NO_ERRNO, _("New video_params: %s"), newline);
+
+    } else {
+        MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO
+            ,_("Programming error.  Unknown configuration item: %s"), cfgitm);
+    }
+
+    return;
 
 }
 

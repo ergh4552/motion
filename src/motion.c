@@ -41,8 +41,6 @@
 #include "dbse.h"
 
 
-#define IMAGE_BUFFER_FLUSH ((unsigned int)-1)
-
 /**
  * tls_key_threadnr
  *
@@ -635,10 +633,8 @@ static void motion_detected(struct context *cnt, int dev, struct image_data *img
  * Parameters:
  *
  *   cnt        - current thread's context struct
- *   max_images - Max number of images to process
- *                Set to IMAGE_BUFFER_FLUSH to send/save all images in buffer
  */
-static void process_image_ring(struct context *cnt, unsigned int max_images)
+static void process_image_ring(struct context *cnt)
 {
     /*
      * We are going to send an event, in the events there is still
@@ -763,14 +759,6 @@ static void process_image_ring(struct context *cnt, unsigned int max_images)
         /* Increment to image after last sended */
         if (++cnt->imgs.image_ring_out >= cnt->imgs.image_ring_size) {
             cnt->imgs.image_ring_out = 0;
-        }
-
-        if (max_images != IMAGE_BUFFER_FLUSH) {
-            max_images--;
-            /* breakout if we have done max_images */
-            if (max_images == 0) {
-                break;
-            }
         }
 
         /* loop until out and in is same e.g. buffer empty */
@@ -1203,14 +1191,16 @@ static int motion_init(struct context *cnt)
     /* Set output picture type */
     if (mystreq(cnt->conf.picture_type, "ppm")) {
         cnt->imgs.picture_type = IMAGE_TYPE_PPM;
+    } else if (mystreq(cnt->conf.picture_type, "grey")) {
+        cnt->imgs.picture_type = IMAGE_TYPE_GREY;
     } else if (mystreq(cnt->conf.picture_type, "webp")) {
         #ifdef HAVE_WEBP
-                cnt->imgs.picture_type = IMAGE_TYPE_WEBP;
+            cnt->imgs.picture_type = IMAGE_TYPE_WEBP;
         #else
-                /* Fallback to jpeg if webp was selected in the config file, but the support for it was not compiled in */
-                MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO
-                ,_("webp image format is not available, failing back to jpeg"));
-                cnt->imgs.picture_type = IMAGE_TYPE_JPEG;
+            /* Fallback to jpeg if webp was selected in the config file, but the support for it was not compiled in */
+            MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO
+            ,_("webp image format is not available, failing back to jpeg"));
+            cnt->imgs.picture_type = IMAGE_TYPE_JPEG;
         #endif /* HAVE_WEBP */
     } else {
         cnt->imgs.picture_type = IMAGE_TYPE_JPEG;
@@ -1440,8 +1430,12 @@ static int motion_init(struct context *cnt)
 static void motion_cleanup(struct context *cnt)
 {
 
-    event(cnt, EVENT_TIMELAPSEEND, NULL, NULL, NULL, NULL);
-    event(cnt, EVENT_ENDMOTION, NULL, NULL, NULL, NULL);
+    event(cnt, EVENT_TIMELAPSEEND, NULL, NULL, NULL, &cnt->current_image->timestamp_tv);
+    if (cnt->event_nr == cnt->prev_event) {
+      /* run only if event active; else, may overwrite last event's data */
+      event(cnt, EVENT_ENDMOTION, NULL, NULL, NULL,  &cnt->current_image->timestamp_tv);
+      cnt->event_nr++;
+    }
 
     mot_stream_deinit(cnt);
 
@@ -2436,11 +2430,13 @@ static void mlp_actions(struct context *cnt)
 
     mlp_areadetect(cnt);
 
+    process_image_ring(cnt);
+
     /* Check for movie length */
     if ((cnt->conf.movie_max_time > 0) &&
         (cnt->event_nr == cnt->prev_event) &&
-        ((cnt->currenttime - cnt->eventtime) >= cnt->conf.movie_max_time)) {
-        cnt->event_stop = TRUE;
+        (cnt->current_image->timestamp_tv.tv_sec - cnt->movietime >= cnt->conf.movie_max_time)) {
+        event(cnt, EVENT_MAX_MOVIE, NULL, NULL, NULL, &cnt->current_image->timestamp_tv);
     }
 
     /* Check event gap */
@@ -2454,8 +2450,6 @@ static void mlp_actions(struct context *cnt)
         if (cnt->event_nr == cnt->prev_event) {
             /* When prev_event = event_nr, there is currently
              * an event occurring so trigger ending events */
-
-            process_image_ring(cnt, IMAGE_BUFFER_FLUSH);  /* Flush image buffer */
 
             /* Save preview_shot here at the end of event */
             if (cnt->imgs.preview_image.diffs) {
@@ -2483,9 +2477,6 @@ static void mlp_actions(struct context *cnt)
         cnt->event_stop = FALSE;
         cnt->event_user = FALSE;
     }
-
-    /* Save/send to movie some images */
-    process_image_ring(cnt, 2);
 
 }
 
@@ -3579,7 +3570,7 @@ int main (int argc, char **argv)
 
     ffmpeg_global_deinit();
 
-    dbse_global_deinit();
+    dbse_global_deinit(cnt_list);
 
     motion_shutdown();
 

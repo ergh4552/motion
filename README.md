@@ -1,42 +1,18 @@
 Motion
 =============
 
-## Status
-The build status from travis-ci for the master branch is: [![Build Status](https://travis-ci.org/Motion-Project/motion.svg?branch=master)](https://travis-ci.org/Motion-Project/motion)
-
 ## Description
 
-Motion is a program that monitors the video signal from one or more cameras and
-is able to detect if a significant part of the picture has changed. Or in other
-words, it can detect motion.
-
-## Documentation
-
-The documentation for Motion is contained within the file motion_guide.html.
-
-The offline version of this file is available in the **doc/motion** directory.  The
-online version of the motion_guide.html file can be viewed [here](https://motion-project.github.io/motion_guide.html)
-
-In addition to the detailed building instructions included within the guide, the
-INSTALL file contains abbreviated building instructions.
+Motion is a program that monitors the signal from video cameras and detects changes in the images.
 
 ## Resources
 
-Please join the mailing list [here](https://lists.sourceforge.net/lists/listinfo/motion-user)
+Please see the [Motion home page](https://motion-project.github.io/) for information regarding building the Motion code from source, documentation of the current and prior releases as well as recent news associated with the application.  Review the [releases page](https://github.com/Motion-Project/motion/releases) for packaged deb files and release notes.  The [issues page](https://github.com/Motion-Project/motion/issues) provides a method to report code bugs while the [discussions page](https://github.com/Motion-Project/motion/discussions) can be used for general questions.
 
-We prefer support through the mailing list because more people will have the benefit from the answers.
-A archive of mailing list discussions can be viewed [here](https://sourceforge.net/p/motion/mailman/motion-user/)
+Additionally, there is [Motion User Group List](https://lists.sourceforge.net/lists/listinfo/motion-user) that you can sign up for and submit your question or the [IRC #motion](ircs://irc.libera.chat:6697/motion) on Libera Chat
 
 ## License
 
-Motion is mainly distributed under the GNU GENERAL PUBLIC LICENSE (GPL) version 2 or later.
-See the copyright file for a list of all the licensing terms of the various components of Motion.
+Motion version 5.0 and later is distributed under the GNU GENERAL PUBLIC LICENSE (GPL) version 3 or later.
 
-The file CREDITS lists the many people who have contributed to Motion over the years.
-
-## Contributing
-
-Issues and Patches should be submitted via github and include detail descriptions
-of the issue being addressed as well as any documentation updates that would be
-needed with the change.
 
